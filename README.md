@@ -1,5 +1,6 @@
 # Operating_Systems
-Process Scheduling
+**Process Scheduling**
+
 This exercise is to show you how to use Linux’s scheduling policies for different processes. You will be creating three processes, where each of the three processes will count from 1 to 2^32. The three processes should be created with fork() and thereafter the child processes should use execl() family system calls to run another C file which will do the counting mentioned above.
 
 
