@@ -7,7 +7,7 @@ int main() {
     param.sched_priority = 1; // Default Priority for SCHED_FIFO
     if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
             perror("sched_setscheduler");
-            exit("EXIT_FAILURE");
+            exit(EXIT_FAILURE);
         }
 
     uint64_t count = 0;
