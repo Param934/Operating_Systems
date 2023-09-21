@@ -14,7 +14,7 @@ void count_running_processes(void) {
     int count = 0;
     struct task_struct *task;
     for_each_process(task) {
-        if (task -> state == TASK_RUNNING) count++;
+        if (task -> __state == TASK_RUNNING) count++;
     }
     printk(KERN_INFO "Number of Running Processes = %d\n", count);
 }
