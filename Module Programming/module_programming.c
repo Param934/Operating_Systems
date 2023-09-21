@@ -1,9 +1,6 @@
 #include <linux/sched/signal.h>
 #include <linux/init.h>
-#include <linux/pid_namespace.h>
-#include <linux/cdev.h>
-#include <linux/proc_fs.h>
-#include <linux/slab.h>
+#include <linux/sched.h>
 #include <linux/module.h>
 
 MODULE_LICENSE("GPL");
