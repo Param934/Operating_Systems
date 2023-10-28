@@ -79,7 +79,12 @@ Input Parameter: Nothing
 Returns: Nothing
 */
 void mems_finish(){
-    
+    if (memsHeapStart) {
+        if (munmap(memsHeapStart, PAGE_SIZE)) == -1{
+			perror("error in unmapping memory of memsHeapStart");
+			exit(1);
+		}
+    }
 }
 
 
