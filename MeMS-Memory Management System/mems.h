@@ -8,10 +8,11 @@ you can also make additional helper functions a you wish
 
 REFER DOCUMENTATION FOR MORE DETAILS ON FUNSTIONS AND THEIR FUNCTIONALITY
 */
+
 // add other headers as required
 #include<stdio.h>
 #include<stdlib.h>
-
+#include <sys/mman.h>
 
 /*
 Use this macro where ever you need PAGE_SIZE.
@@ -22,7 +23,7 @@ macro to make the output of all system same and conduct a fair evaluation.
 
 // Define the main chain node structure
 struct mainChainNode{
-	void* main_addr; //virtual address of main node
+	void* mainAddr; // MeMS virtual address of main node
 	struct subChainNode* subChain;
 	struct mainChainNode* prev;
 	struct mainChainNode* next;
@@ -30,8 +31,8 @@ struct mainChainNode{
 
 // Define the sub-chain node structure
 struct subChainNode{
-	void* subAddr; // MeMS virtual address of the sub node
-    size_t size;    // Size of the segment
+	void* subAddr;  // MeMS virtual address of the sub node
+    size_t segmentSize;
     int is_hole;    // 1 if HOLE, 0 if PROCESS
 	struct subChainNode* prev;
 	struct subChainNode* next;
@@ -45,14 +46,34 @@ Initializes all the required parameters for the MeMS system. The main parameters
 Input Parameter: Nothing
 Returns: Nothing
 */
-
 void mems_init(){
+	struct mainChainNode* mainChainHead = NULL;
+	void* memsHeapStart = NULL;	// Starting MeMS virtual address
+	void* addr = NULL;
+	int protection = PROT_READ | PROT_WRITE; //readable and writable
+	int map_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+	int fd= -1;	// Passing an invalid file descriptor
+	off_t offset=0;
+	memsHeapStart = mmap(addr, PAGE_SIZE, protection, map_flags, fd, offset);
+    if (memsHeapStart == MAP_FAILED) {
+        perror("failed to initialize memsHeapStart");
+        exit(1);
+    }
 
+	//Initializing the main chain
+	mainChainHead= (struct MainChainNode*)mmap(NULL, sizeof(struct MainChainNode), protection, map_flags, fd, offset);
+    if (mainChainHead== MAP_FAILED) {
+        perror("failed to initialize mainChainHead");
+        exit(1);
+    }
+    mainChainHead->mainAddr = memsHeapStart;
+    mainChainHead->subChain = NULL;
+    mainChainHead->prev = NULL;
+    mainChainHead->next = NULL;
 }
 
-
 /*
-This function will be called at the end of the MeMS system and its main job is to unmap the 
+This function will be called at the end of the MeMS system and its main job is to unmap the
 allocated memory using the munmap system call.
 Input Parameter: Nothing
 Returns: Nothing
