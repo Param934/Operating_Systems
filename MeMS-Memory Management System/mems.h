@@ -3,7 +3,7 @@ All the main functions with respect to the MeMS are inplemented here
 read the function discription for more details
 
 NOTE: DO NOT CHANGE THE NAME OR SIGNATURE OF FUNCTIONS ALREADY PROVIDED
-you are only allowed to implement the functions 
+you are only allowed to implement the functions
 you can also make additional helper functions a you wish
 
 REFER DOCUMENTATION FOR MORE DETAILS ON FUNSTIONS AND THEIR FUNCTIONALITY
@@ -20,6 +20,22 @@ macro to make the output of all system same and conduct a fair evaluation.
 */
 #define PAGE_SIZE 4096
 
+// Define the main chain node structure
+struct mainChainNode{
+	void* main_addr; //virtual address of main node
+	struct subChainNode* subChain;
+	struct mainChainNode* prev;
+	struct mainChainNode* next;
+}
+
+// Define the sub-chain node structure
+struct subChainNode{
+	void* subAddr; // MeMS virtual address of the sub node
+    size_t size;    // Size of the segment
+    int is_hole;    // 1 if HOLE, 0 if PROCESS
+	struct subChainNode* prev;
+	struct subChainNode* next;
+}
 
 /*
 Initializes all the required parameters for the MeMS system. The main parameters to be initialized are:
@@ -29,6 +45,7 @@ Initializes all the required parameters for the MeMS system. The main parameters
 Input Parameter: Nothing
 Returns: Nothing
 */
+
 void mems_init(){
 
 }
