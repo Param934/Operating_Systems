@@ -61,7 +61,7 @@ void mems_init(){
     }
 
 	//Initializing the main chain
-	mainChainHead= (struct MainChainNode*)mmap(NULL, sizeof(struct MainChainNode), protection, map_flags, fd, offset);
+	mainChainHead= (struct mainChainNode*)mmap(NULL, sizeof(struct mainChainNode), protection, map_flags, fd, offset);
     if (mainChainHead== MAP_FAILED) {
         perror("failed to initialize mainChainHead");
         exit(1);
@@ -84,6 +84,20 @@ void mems_finish(){
 			perror("error in unmapping memory of memsHeapStart");
 			exit(1);
 		}
+    }
+
+    // Iterate through the main chain and unmap both main and sub-chain nodes
+    struct mainChainNode* currentMain = mainChainhead;
+    while (currentMain) {
+        struct subChainNode* currentSub = currentMain->subChain;
+        while (currentSub) {
+            struct subChainNode* temp_sub = currentSub;
+            currentSub = currentSub->next;
+            munmap(temp_sub, sizeof(struct subChainNode));
+        }
+        struct mainChainNode* temp_main = currentMain;
+        currentMain = currentMain->next;
+        munmap(temp_main, sizeof(struct mainChainNode));
     }
 }
 
