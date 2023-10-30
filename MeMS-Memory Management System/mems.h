@@ -132,21 +132,20 @@ void mems_print_stats() {
     size_t unused_memory = 0;
 
     // Iterate through the main chain and sub-chains
-    struct MainChainNode* current_main = mainChainHead;
-    while (current_main) {
-        printf("Main Chain Node - MeMS Virtual Address: %p\n", current_main->main_addr);
+    struct MainChainNode* currentMain = mainChainHead;
+    while (currentMain) {
+        printf("Main Chain Node - MeMS Virtual Address: %p\n", currentMain->main_addr);
 
         // Sub-chain statistics
-        struct SubChainNode* current_sub = current_main->sub_chain;
-        while (current_sub) {
-            printf("  Sub Chain Node - MeMS Virtual Address: %p, Size: %zu, Type: %s\n", current_sub->sub_addr, current_sub->size, current_sub->is_hole ? "HOLE" : "PROCESS");
-            
-            if (current_sub->is_hole) unused_memory += current_sub->size;            
-            current_sub = current_sub->next;
+        struct SubChainNode* currentSub = currentMain->sub_chain;
+        while (currentSub) {
+            printf("\tSub Chain Node - MeMS Virtual Address: %p, Size: %zu, Type: %s\n", currentSub->sub_addr, currentSub->size, currentSub->is_hole ? "HOLE" : "PROCESS");
+            if (currentSub->is_hole) unused_memory += currentSub->size;            
+            currentSub = currentSub->next;
         }
-
+		printf("/n");
         total_pages_utilized++;
-        current_main = current_main->next;
+        currentMain = currentMain->next;
     }
 
     printf("Total Pages Utilized: %d\n", total_pages_utilized);
@@ -159,16 +158,32 @@ Returns the MeMS physical address mapped to ptr ( ptr is MeMS virtual address).
 Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: MeMS physical address mapped to the passed ptr (MeMS virtual address).
 */
-void *mems_get(void*v_ptr){
-    
+void* mems_get(void* v_ptr) {
+    struct MainChainNode* currentMain = mainChainHead;
+
+    // Iterate through the main chain
+    while (currentMain) {
+        struct SubChainNode* currentSub = currentMain->sub_chain;
+        while (currentSub) {
+            if (currentSub->sub_addr == v_ptr) {
+                // Return the MeMS physical address
+                return currentSub->sub_addr;
+            }
+            currentSub = currentSub->next;
+        }
+        currentMain = currentMain->next;
+    }
+    // If not found, return NULL or an appropriate error value
+    return NULL;
 }
+
 
 
 /*
 this function free up the memory pointed by our virtual_address and add it to the free list
-Parameter: MeMS Virtual address (that is created by MeMS) 
+Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: nothing
 */
-void mems_free(void *v_ptr){
+void mems_free(void* v_ptr) {
     
 }
