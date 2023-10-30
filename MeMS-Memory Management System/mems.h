@@ -54,16 +54,16 @@ void mems_init(){
 	int map_flags = MAP_PRIVATE | MAP_ANONYMOUS;
 	int fd= -1;	// Passing an invalid file descriptor
 	off_t offset=0;
-	memsHeapStart = mmap(addr, PAGE_SIZE, protection, map_flags, fd, offset);
-    if (memsHeapStart == MAP_FAILED) {
-        perror("failed to initialize memsHeapStart");
-        exit(1);
-    }
-
+	
 	//Initializing the main chain
 	mainChainHead= (struct mainChainNode*)mmap(NULL, sizeof(struct mainChainNode), protection, map_flags, fd, offset);
     if (mainChainHead== MAP_FAILED) {
         perror("failed to initialize mainChainHead");
+        exit(1);
+    }
+	memsHeapStart = mmap(addr, PAGE_SIZE, protection, map_flags, fd, offset);
+    if (memsHeapStart == MAP_FAILED) {
+        perror("failed to initialize memsHeapStart");
         exit(1);
     }
     mainChainHead->mainAddr = memsHeapStart;
@@ -127,8 +127,30 @@ this function print the stats of the MeMS system like
 Parameter: Nothing
 Returns: Nothing but should print the necessary information on STDOUT
 */
-void mems_print_stats(){
+void mems_print_stats() {
+    int total_pages_utilized = 0;
+    size_t unused_memory = 0;
 
+    // Iterate through the main chain and sub-chains
+    struct MainChainNode* current_main = mainChainHead;
+    while (current_main) {
+        printf("Main Chain Node - MeMS Virtual Address: %p\n", current_main->main_addr);
+
+        // Sub-chain statistics
+        struct SubChainNode* current_sub = current_main->sub_chain;
+        while (current_sub) {
+            printf("  Sub Chain Node - MeMS Virtual Address: %p, Size: %zu, Type: %s\n", current_sub->sub_addr, current_sub->size, current_sub->is_hole ? "HOLE" : "PROCESS");
+            
+            if (current_sub->is_hole) unused_memory += current_sub->size;            
+            current_sub = current_sub->next;
+        }
+
+        total_pages_utilized++;
+        current_main = current_main->next;
+    }
+
+    printf("Total Pages Utilized: %d\n", total_pages_utilized);
+    printf("Unused Memory: %zu bytes\n", unused_memory);
 }
 
 
