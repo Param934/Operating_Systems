@@ -182,6 +182,28 @@ Parameter: Nothing
 Returns: Nothing but should print the necessary information on STDOUT
 */
 void mems_print_stats() {
+	printf("Total pages utilized by mems_malloc: %d",totalPageCount);
+	printf();
+	struct mainChainNode* mainNode=head->mainChainNode;
+	size_t freeMem=0;
+	while (mainNode){
+		int mainNodeNumber=1;
+		freeMem+=mainNode->unallocatedMem;
+		printf("MeMS virtual Address of Main Node %d is %p",mainNodeNumber, mainNode->mainAddr);
+		printf("Starting Physical Address of Main Node %d is %p",mainNodeNumber, mainNode->startingPhysicalAddr);
+		printf("Number of pages in Main Node %d is %d",mainNodeNumber, mainNode->pageCount);
+		struct subChainNode* subNode=mainNode->subChainNode;
+		while (subNode){
+			int subNodeNumber=1;
+			printf("\tMeMS virtual Address of Sub Node %d is %p",subNodeNumber, subNode->subAddr);
+			printf("\tSegment size of Sub Node %d is %zu",subNodeNumber, subNode->segmentSize);
+			printf("\tSub Node %d is %s",subNodeNumber, "HOLE" if (subNode->is_hole) else "PROCESS");
+			subNode=subNode->next;
+		}
+		mainNode=mainNode->next;
+	}
+	printf();
+	printf("Unused memory in Free list: %zu", freeMem);
 }
 
 
