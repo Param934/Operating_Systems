@@ -69,27 +69,27 @@ void mems_finish(){
 	}
 
 
-void addSubChainNode(void* prevNode, size_t size){
+struct subChainNode* addSubChainNode(void* prevNode, size_t size){
 	struct subChainNode* subChainNode=(struct subChainNode*)mmap(NULL, sizeof(struct subChainNode), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (subChainNode == MAP_FAILED) {
 		perror("mmap");
 		exit(1);
 	}
-	struct subChainNode* nextNode=prevNode->next;
-	subChainNode->subAddr=prevNode->subAddr+prevNode->segmentSize;
 	subChainNode->segmentSize=size;
-	subChainNode->next=nexNode;
-	prevNode->next=subChainNode;
-	// return subChainNode;
+	subChainNode->is_hole=1;
+	if (prevNode) prevNode->next=subChainNode;
+	subChainNode->prev=prevNode;
+	subChainNode->next=NULL;
+	return subChainNode;
 }
 
-struct mainChainNode* addMainChainNode(void* prevNode, size_t size){
+struct mainChainNode* addMainChainNode(void* prevMainNode, size_t mainSize, size_t subSize){
 	void* addr = NULL;
 	int protection = PROT_READ | PROT_WRITE; //readable and writable
 	int map_flags = MAP_PRIVATE | MAP_ANONYMOUS;
 	int fd= -1;	// Passing an invalid file descriptor
 	off_t offset=0;
-	void* memsHeapStart = mmap(addr, PAGE_SIZE*ceil(size/PAGE_SIZE), protection, map_flags, fd, offset);
+	void* memsHeapStart = mmap(addr, PAGE_SIZE*ceil(mainSize/PAGE_SIZE), protection, map_flags, fd, offset);
 	if (memsHeapStart == MAP_FAILED) {
 		perror("failed to initialize memsHeapStart");
 		exit(1);
@@ -99,16 +99,28 @@ struct mainChainNode* addMainChainNode(void* prevNode, size_t size){
 		perror("mmap");
 		exit(1);
 	}
+	totalPageCount+=ceil(mainSize/PAGE_SIZE);
 	mainChainNode->mainAddr = starting_v_addr*totalPageCount;
 	mainChainNode->startingPhysicalAddr = memsHeapStart;
-	mainChainNode->pageCount=ceil(size/PAGE_SIZE);
+	mainChainNode->pageCount=ceil(mainSize/PAGE_SIZE);
 	mainChainHead->subChain = NULL;
 	mainChainHead->prev = NULL;
 	mainChainHead->next = NULL;
 	mainChainNode->unallocatedMem = mainChainNode->pageCount*PAGE_SIZE;
+
+	prevMainNode->mainChainNode=newMainNode;
+	struct subChainNode* newSubNode=addSubChainNode(NULL,subSize);
+	newMainNode->subChainNode=newSubNode;
+	newSubNode->subAddr=newMainNode->mainAddr;
+	newSubNode->segmentSize=subSize;
+	newSubNode->is_hole=0;
+	if (subSize<PAGE_SIZE*ceil(subSize/PAGE_SIZE)){
+		size_t remainingSize=subSize-PAGE_SIZE*ceil(subSize/PAGE_SIZE);
+		struct subChainNode* newSubNode2=addSubChainNode(newSubNode2,remainingSize);
+		newSubNode2->subAddr=newSubNode->subAddr+newSubNode->segmentSize;
+	}
 	return mainChainNode;
 }
-
 /*
 Allocates memory of the specified size by reusing a segment from the free list if
 a sufficiently large segment is available.
@@ -138,7 +150,11 @@ void* mems_malloc(size_t size){
 							remainingSize=segmentSize-size;
 							currentSub->segmentSize=size;
 							currentSub->is_hole=0;
-							addSubChainNode(currentSub,remainingSize);
+							struct subChainNode* nextNode=currentSub->next;
+							struct subChainNode* newSubNode=addSubChainNode(currentSub,remainingSize);
+							nextNode->prev=newSubNode;
+							newSubNode->next=nextNode;
+							newSubNode->subAddr=currentSub->subAddr+currentSub->segmentSize;
 							return currentSub->subAddr;
 						}
 					}
@@ -148,22 +164,12 @@ void* mems_malloc(size_t size){
 			currentMain = currentMain->next;
 		}
 		//No free memory available, has to create another node
-		struct mainChainNode* addedNode=addMainChainNode(currentMain,size);
-		currentMain->next=addedNode;
-		addedNode->prev=currentMain;
-		struct subChainNode* currentSub=(struct subChainNode*)mmap(NULL, sizeof(struct subChainNode), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-		if (subChainNode == MAP_FAILED) {
-			perror("mmap");
-			exit(1);
-		}
-		currentSub->subAddr=currentMain->mainAddr;
-		currentSub->segmentSize=size;
-		currentSub->is_hole=0;
-		//addSubChainNode work to be done
+		struct mainChainNode* newMainNode=addMainChainNode(currentMain,PAGE_SIZE*ceil(size/PAGE_SIZE),size,currentMain);
+		return newMainNode->subChainNode->subAddr;
 	}
 	else{ //When not even single main chain node is initialized
-		struct mainChainNode* addedNode=addMainChainNode(head,size);
-		head->mainChainNode=addedNode;
+		struct mainChainNode* newMainNode=addMainChainNode(head,PAGE_SIZE*ceil(size/PAGE_SIZE),size,head);
+		return newMainNode->subChainNode->subAddr;
 	}
 }
 
