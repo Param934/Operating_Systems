@@ -65,8 +65,24 @@ allocated memory using the munmap system call.
 Input Parameter: Nothing
 Returns: Nothing
 */
-void mems_finish(){
-	}
+void mems_finish() {
+    // Free the main chain and sub-chains
+    struct MainChainNode* currentMain = head->mainChainNode;
+    while (currentMain) {
+        struct SubChainNode* currentSub = currentMain->sub_chain;
+        while (currentSub) {
+            struct SubChainNode* tempSub = currentSub;
+            currentSub = currentSub->next;
+            munmap(tempSub, sizeof(struct SubChainNode));
+        }
+        struct MainChainNode* tempMain = currentMain;
+        currentMain = currentMain->next;
+        munmap(tempMain, sizeof(struct MainChainNode));
+    }
+
+    // Set the main_chain_head to NULL to indicate that the MeMS system is finished
+    head = NULL;
+}
 
 
 struct subChainNode* addSubChainNode(void* prevNode, size_t size){
@@ -121,6 +137,7 @@ struct mainChainNode* addMainChainNode(void* prevMainNode, size_t mainSize, size
 	}
 	return mainChainNode;
 }
+
 /*
 Allocates memory of the specified size by reusing a segment from the free list if
 a sufficiently large segment is available.
@@ -135,6 +152,7 @@ Returns: MeMS Virtual address (that is created by MeMS)
 */
 
 void* mems_malloc(size_t size){
+	if (size==0) return NULL;
 	if (head->MainChainNode){
 		// Find a sufficiently large segment in the free list
 		struct mainChainNode* currentMain = head->mainChainNode;
@@ -164,11 +182,11 @@ void* mems_malloc(size_t size){
 			currentMain = currentMain->next;
 		}
 		//No free memory available, has to create another node
-		struct mainChainNode* newMainNode=addMainChainNode(currentMain,PAGE_SIZE*ceil(size/PAGE_SIZE),size,currentMain);
+		struct mainChainNode* newMainNode=addMainChainNode(currentMain,PAGE_SIZE*ceil(size/PAGE_SIZE),size);
 		return newMainNode->subChainNode->subAddr;
 	}
 	else{ //When not even single main chain node is initialized
-		struct mainChainNode* newMainNode=addMainChainNode(head,PAGE_SIZE*ceil(size/PAGE_SIZE),size,head);
+		struct mainChainNode* newMainNode=addMainChainNode(head,PAGE_SIZE*ceil(size/PAGE_SIZE),size);
 		return newMainNode->subChainNode->subAddr;
 	}
 }
@@ -189,13 +207,13 @@ void mems_print_stats() {
 	while (mainNode){
 		int mainNodeNumber=1;
 		freeMem+=mainNode->unallocatedMem;
-		printf("MeMS virtual Address of Main Node %d is %p",mainNodeNumber, mainNode->mainAddr);
-		printf("Starting Physical Address of Main Node %d is %p",mainNodeNumber, mainNode->startingPhysicalAddr);
+		printf("MeMS virtual Address of Main Node %d is %lu",mainNodeNumber, mainNode->mainAddr);
+		printf("Starting Physical Address of Main Node %d is %lu",mainNodeNumber, mainNode->startingPhysicalAddr);
 		printf("Number of pages in Main Node %d is %d",mainNodeNumber, mainNode->pageCount);
 		struct subChainNode* subNode=mainNode->subChainNode;
 		while (subNode){
 			int subNodeNumber=1;
-			printf("\tMeMS virtual Address of Sub Node %d is %p",subNodeNumber, subNode->subAddr);
+			printf("\tMeMS virtual Address of Sub Node %d is %lu",subNodeNumber, subNode->subAddr);
 			printf("\tSegment size of Sub Node %d is %zu",subNodeNumber, subNode->segmentSize);
 			printf("\tSub Node %d is %s",subNodeNumber, "HOLE" if (subNode->is_hole) else "PROCESS");
 			subNode=subNode->next;
