@@ -242,11 +242,30 @@ void* mems_get(void* v_ptr) {
 	return physicalAddr=startingPhysicalAddr+difference;
 }
 
-
 /*
 this function free up the memory pointed by our virtual_address and add it to the free list
 Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: nothing
 */
 void mems_free(void* v_ptr) {
+	struct mainChainNode* mainNode=head->mainChainNode;
+	struct subChainNode* subNode=mainChainNode->subNode;
+	while (v_ptr<=mainNode->next->mainAddr) mainNode=mainNode->next;
+	while (v_ptr!=mainNode->subChain->subAddr) subNode=subNode->next;
+	if (v_ptr!=mainNode->subChain->subAddr) printf("ptr subChainNode not found");
+	if subNode->is_hole==0(subNode->is_hole=1);
+	else (printf("ptr was already hole"));
+	//checking for adjacent holes
+	if (subNode->prev->is_hole){
+		subNode->prev->segmentSize=subNode->prev->segmentSize+subNode->segmentSize;
+		subNode->prev->next=subNode->next;
+		subNode->next->prev=subNode->prev;
+		subNode=subNode->prev;
+
+	}
+	if (subNode->next->is_hole){
+		subNode->segmentSize=subNode->next->segmentSize+subNode->segmentSize;
+		subNode->next=subNode->next->next;
+		subNode->next->next->prev=subNode;
+	}
 }
