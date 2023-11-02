@@ -231,7 +231,17 @@ Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: MeMS physical address mapped to the passed ptr (MeMS virtual address).
 */
 void* mems_get(void* v_ptr) {
+	v_ptr=(int)v_ptr;
+	int offset=v_ptr%PAGE_SIZE;
+	int page=v_ptr/PAGE_SIZE;
+	int pageCount=0;
+	struct mainChainNode* mainNode=head->mainChainNode;
+	while(pageCount+mainNode->pageCount<page) pageCount+=mainNode->pageCount;
+	void* startingPhysicalAddr= mainNode->startingPhysicalAddr;
+	int diference=v_ptr-pageCount*PAGE_SIZE;
+	return physicalAddr=startingPhysicalAddr+difference;
 }
+
 
 /*
 this function free up the memory pointed by our virtual_address and add it to the free list
