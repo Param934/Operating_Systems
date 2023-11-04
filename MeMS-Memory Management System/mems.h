@@ -87,39 +87,6 @@ void mems_finish() {
     head = NULL;
 }
 
-struct mainChainNode* addMainChainNode(void* prevMainNode, size_t size){
-	void* memsHeapStart = mmap(NULL, PAGE_SIZE*ceil(size/PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (memsHeapStart == MAP_FAILED) {
-		perror("failed to initialize memsHeapStart");
-		exit(1);
-	}
-	struct mainChainNode* newMainNode=(struct mainChainNode*)mmap(NULL, sizeof(struct mainChainNode), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (newMainNode == MAP_FAILED) {
-		perror("mmap");
-		exit(1);
-	}
-	totalPageCount+=ceil(size/PAGE_SIZE);
-	newMainNode->startingPhysicalAddr = memsHeapStart;
-	newMainNode->pageCount=ceil(size/PAGE_SIZE);
-	newMainNode->subChain = NULL;
-	newMainNode->prev = NULL;
-	newMainNode->next = NULL;
-	// newMainNode->unallocatedMem = newMainNode->pageCount*PAGE_SIZE;
-
-	prevMainNode->next=newMainNode;
-	struct subChainNode* newSubNode=addSubChainNode(NULL,size);
-	newMainNode->subChain=newSubNode;
-	newSubNode->subAddr=starting_v_addr+PAGE_SIZE*totalPageCount;
-	newSubNode->segmentSize=size;
-	newSubNode->is_hole=0;
-	if (size<PAGE_SIZE*ceil(size/PAGE_SIZE)){
-		size_t remainingSize=size-PAGE_SIZE*ceil(size/PAGE_SIZE);
-		struct subChainNode* newSubNode2=addSubChainNode(newSubNode,remainingSize);
-		newSubNode2->subAddr=newSubNode->subAddr+newSubNode->segmentSize;
-		newMainNode->unallocatedMem=remainingSize;
-	} else newMainNode->unallocatedMem=0;
-	return newMainNode;
-}
 
 struct subChainNode* addSubChainNode(struct subChainNode* prevNode, size_t size){
 	struct subChainNode* subChainNode=(struct subChainNode*)mmap(NULL, sizeof(struct subChainNode), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -136,6 +103,39 @@ struct subChainNode* addSubChainNode(struct subChainNode* prevNode, size_t size)
 	subChainNode->prev=prevNode;
 	subChainNode->next=NULL;
 	return subChainNode;
+}
+
+struct mainChainNode* addMainChainNode(void* prevMainNode, size_t size){
+	void* memsHeapStart = mmap(NULL, PAGE_SIZE*ceil(size/PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (memsHeapStart == MAP_FAILED) {
+		perror("failed to initialize memsHeapStart");
+		exit(1);
+	}
+	struct mainChainNode* newMainNode=(struct mainChainNode*)mmap(NULL, sizeof(struct mainChainNode), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (newMainNode == MAP_FAILED) {
+		perror("mmap");
+		exit(1);
+	}
+	totalPageCount+=ceil(size/PAGE_SIZE);
+	newMainNode->startingPhysicalAddr = (uint64_t)memsHeapStart;
+	newMainNode->pageCount=ceil(size/PAGE_SIZE);
+	newMainNode->subChain = NULL;
+	newMainNode->prev = NULL;
+	newMainNode->next = NULL;
+
+	prevMainNode->next=newMainNode;
+	struct subChainNode* newSubNode=addSubChainNode(NULL,size);
+	newMainNode->subChain=newSubNode;
+	newSubNode->subAddr=starting_v_addr+PAGE_SIZE*totalPageCount;
+	newSubNode->segmentSize=size;
+	newSubNode->is_hole=0;
+	if (size<PAGE_SIZE*ceil(size/PAGE_SIZE)){
+		size_t remainingSize=size-PAGE_SIZE*ceil(size/PAGE_SIZE);
+		struct subChainNode* newSubNode2=addSubChainNode(newSubNode,remainingSize);
+		newSubNode2->subAddr=newSubNode->subAddr+newSubNode->segmentSize;
+		newMainNode->unallocatedMem=remainingSize;
+	} else newMainNode->unallocatedMem=0;
+	return newMainNode;
 }
 
 /*
@@ -203,26 +203,28 @@ Returns: Nothing but should print the necessary information on STDOUT
 */
 void mems_print_stats() {
 	printf("Total pages utilized by mems_malloc: %d",totalPageCount);
-	printf("");
+	printf("\n");
 	struct mainChainNode* mainNode=head->next;
 	size_t freeMem=0;
+	int mainNodeNumber=1;
 	while (mainNode){
-		int mainNodeNumber=1;
 		freeMem+=mainNode->unallocatedMem;
-		printf("MeMS virtual Address of Main Node %d is %lu",mainNodeNumber, mainNode->subChain->subAddr);
+		printf("MeMS virtual Address of Main Node %d is %d",mainNodeNumber, mainNode->subChain->subAddr);
 		printf("Starting Physical Address of Main Node %d is %lu",mainNodeNumber, mainNode->startingPhysicalAddr);
 		printf("Number of pages in Main Node %d is %d",mainNodeNumber, mainNode->pageCount);
 		struct subChainNode* subNode=mainNode->subChain;
+		int subNodeNumber=1;
 		while (subNode){
-			int subNodeNumber=1;
-			printf("\tMeMS virtual Address of Sub Node %d is %lu",subNodeNumber, subNode->subAddr);
+			printf("\tMeMS virtual Address of Sub Node %d is %d",subNodeNumber, subNode->subAddr);
 			printf("\tSegment size of Sub Node %d is %zu",subNodeNumber, subNode->segmentSize);
-			printf("\tSub Node %d is %s",subNodeNumber, "HOLE" if (subNode->is_hole) else "PROCESS");
+			printf("\tSub Node %d is %s", subNodeNumber, (subNode->is_hole ? "HOLE" : "PROCESS"));
 			subNode=subNode->next;
+			subNodeNumber++;
 		}
 		mainNode=mainNode->next;
+		mainNodeNumber++;
 	}
-	printf("");
+	printf("\n");
 	printf("Unused memory in Free list: %zu", freeMem);
 }
 
@@ -251,12 +253,12 @@ Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: nothing
 */
 void mems_free(void* v_ptr) {
-	struct mainChainNode* mainNode=head->mainChainNode;
-	struct subChainNode* subNode=mainChainNode->subNode;
-	while (v_ptr<=mainNode->next->mainAddr) mainNode=mainNode->next;
-	while (v_ptr!=mainNode->subChain->subAddr) subNode=subNode->next;
-	if (v_ptr!=mainNode->subChain->subAddr) printf("ptr subChainNode not found");
-	if subNode->is_hole==0(subNode->is_hole=1);
+	struct mainChainNode* mainNode=head->next;
+	while ((int)v_ptr<=mainNode->next->subChain->subAddr) mainNode=mainNode->next;
+	struct subChainNode* subNode=mainNode->subChain;
+	while ((int)v_ptr!=subNode->subAddr) subNode=subNode->next;
+	if ((int)v_ptr!=mainNode->subChain->subAddr) printf("ptr subChainNode not found");
+	if (subNode->is_hole==0) subNode->is_hole=1;
 	else (printf("ptr was already hole"));
 	//checking for adjacent holes
 	if (subNode->prev->is_hole){
@@ -264,7 +266,6 @@ void mems_free(void* v_ptr) {
 		subNode->prev->next=subNode->next;
 		subNode->next->prev=subNode->prev;
 		subNode=subNode->prev;
-
 	}
 	if (subNode->next->is_hole){
 		subNode->segmentSize=subNode->next->segmentSize+subNode->segmentSize;
