@@ -13,6 +13,7 @@ REFER DOCUMENTATION FOR MORE DETAILS ON FUNSTIONS AND THEIR FUNCTIONALITY
 #include<stdio.h>
 #include<stdlib.h>
 #include<stdint.h>
+#include<unistd.h>
 #include <sys/mman.h>
 #include <math.h>
 
@@ -82,7 +83,6 @@ void mems_finish() {
         currentMain = currentMain->next;
         munmap(tempMain, sizeof(struct mainChainNode));
     }
-
     // Set the main_chain_head to NULL to indicate that the MeMS system is finished
     head = NULL;
 }
@@ -123,7 +123,6 @@ struct mainChainNode* addMainChainNode(void* prevMainNode, size_t size){
 	newMainNode->prev = NULL;
 	newMainNode->next = NULL;
 
-	prevMainNode->next=newMainNode;
 	struct subChainNode* newSubNode=addSubChainNode(NULL,size);
 	newMainNode->subChain=newSubNode;
 	newSubNode->subAddr=starting_v_addr+PAGE_SIZE*totalPageCount;
@@ -185,10 +184,14 @@ void* mems_malloc(size_t size){
 		}
 		//No free memory available, has to create another node
 		struct mainChainNode* newMainNode=addMainChainNode(currentMain,size);
+		newMainNode->prev=currentMain;
+		currentMain->next=newMainNode;
 		return newMainNode->subChain->subAddr;
 	}
 	else{ //When not even single main chain node is initialized
 		struct mainChainNode* newMainNode=addMainChainNode(head,size);
+		newMainNode->prev=NULL;
+		head->next=newMainNode;
 		return newMainNode->subChain->subAddr;
 	}
 }
@@ -227,7 +230,6 @@ void mems_print_stats() {
 	printf("\n");
 	printf("Unused memory in Free list: %zu", freeMem);
 }
-
 
 /*
 Returns the MeMS physical address mapped to ptr ( ptr is MeMS virtual address).
