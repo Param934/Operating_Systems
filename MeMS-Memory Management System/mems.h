@@ -39,6 +39,7 @@ struct mainChainNode{
 // Define the sub-chain node structure
 struct subChainNode{
 	int subAddr;  // MeMS virtual address of the sub node
+	// void* subAddress;
     size_t segmentSize;
     int is_hole;    // 1 if HOLE, 0 if PROCESS
 	struct subChainNode* prev;
@@ -58,7 +59,12 @@ Input Parameter: Nothing
 Returns: Nothing
 */
 void mems_init(){
-	head = NULL;
+	struct header* head=(struct header*)mmap(NULL, sizeof(struct header), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (head == MAP_FAILED) {
+		perror("mmap");
+		exit(1);
+	}
+	head->next= NULL;
 	starting_v_addr=0;
 	totalPageCount=0;
 }
