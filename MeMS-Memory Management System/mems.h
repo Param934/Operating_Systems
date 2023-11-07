@@ -46,7 +46,7 @@ struct subChainNode{
 
 //initializing global variables
 struct header* head;
-unsigned int starting_v_addr;
+size_t starting_v_addr;
 unsigned int totalPageCount;
 /*
 Initializes all the required parameters for the MeMS system. The main parameters to be initialized are:
@@ -110,7 +110,7 @@ struct subChainNode* addSubChainNode(struct subChainNode* prevNode, size_t size)
 }
 //Helper function
 struct mainChainNode* addMainChainNode(void* prevMainNode, size_t size){
-	void* memsHeapStart = mmap(NULL, PAGE_SIZE*ceil(size/PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	void* memsHeapStart = mmap(NULL, PAGE_SIZE*ceil(size/PAGE_SIZE)*sizeof(size_t), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (memsHeapStart == MAP_FAILED) {
 		perror("failed to initialize memsHeapStart");
 		exit(1);
@@ -130,7 +130,7 @@ struct mainChainNode* addMainChainNode(void* prevMainNode, size_t size){
 
 	struct subChainNode* newSubNode=addSubChainNode(NULL,size);
 	newMainNode->subChain=newSubNode;
-	newSubNode->subAddr=starting_v_addr+PAGE_SIZE*totalPageCount;
+	newSubNode->subAddr=(void * ) starting_v_addr+PAGE_SIZE*totalPageCount;
 	newSubNode->segmentSize=size;
 	newSubNode->is_hole=0;
 	if (size<PAGE_SIZE*ceil(size/PAGE_SIZE)){
@@ -155,11 +155,16 @@ Parameter: The size of the memory the user program wants
 Returns: MeMS Virtual address (that is created by MeMS)
 */
 void* mems_malloc(size_t size){
-	if (size==0) return NULL;
-	if (head->next!=NULL){
+	// if (size==0) return NULL;
+	if (head->next == NULL){ //When not even single main chain node is initialized
+		struct mainChainNode* newMainNode=addMainChainNode(head,size);
+		newMainNode->prev=NULL;
+		head->next=newMainNode;
+		return newMainNode->subChain->subAddr;
+	}else{
 		// Find a sufficiently large segment in the free list
 		struct mainChainNode* currentMain = head->next;
-		while (currentMain) {
+		while (currentMain!=NULL) {
 			if (currentMain-> unallocatedMem >= size) {//No need to allocate new memory
 				currentMain->unallocatedMem-=size;
 				struct subChainNode* currentSub = currentMain->subChain;
@@ -193,13 +198,8 @@ void* mems_malloc(size_t size){
 		currentMain->next=newMainNode;
 		return newMainNode->subChain->subAddr;
 	}
-	else{ //When not even single main chain node is initialized
-		struct mainChainNode* newMainNode=addMainChainNode(head,size);
-		newMainNode->prev=NULL;
-		head->next=newMainNode;
-		return newMainNode->subChain->subAddr;
-	}
 }
+
 
 /*
 this function print the stats of the MeMS system like
@@ -217,13 +217,13 @@ void mems_print_stats() {
 	int mainNodeNumber=1;
 	while (mainNode){
 		freeMem+=mainNode->unallocatedMem;
-		printf("MeMS virtual Address of Main Node %d is %lu",mainNodeNumber, mainNode->subChain->subAddr);
-		printf("Starting Physical Address of Main Node %d is %lu",mainNodeNumber, mainNode->startingPhysicalAddr);
+		printf("MeMS virtual Address of Main Node %d is %lu",mainNodeNumber,(size_t) mainNode->subChain->subAddr);
+		printf("Starting Physical Address of Main Node %d is %lu",mainNodeNumber,(size_t) mainNode->startingPhysicalAddr);
 		printf("Number of pages in Main Node %d is %d",mainNodeNumber, mainNode->pageCount);
 		struct subChainNode* subNode=mainNode->subChain;
 		int subNodeNumber=1;
 		while (subNode){
-			printf("\tMeMS virtual Address of Sub Node %d is %lu",subNodeNumber, subNode->subAddr);
+			printf("\tMeMS virtual Address of Sub Node %d is %lu",subNodeNumber,(size_t) subNode->subAddr);
 			printf("\tSegment size of Sub Node %d is %zu",subNodeNumber, subNode->segmentSize);
 			printf("\tSub Node %d is %s", subNodeNumber, (subNode->is_hole ? "HOLE" : "PROCESS"));
 			subNode=subNode->next;
