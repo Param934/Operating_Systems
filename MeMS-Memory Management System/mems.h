@@ -74,17 +74,25 @@ Returns: Nothing
 void mems_finish() {
     // Free the main chain and sub-chains
     struct mainChainNode* currentMain = head->next;
+
     while (currentMain) {
         struct subChainNode* currentSub = currentMain->subChain;
         while (currentSub) {
             struct subChainNode* tempSub = currentSub;
             currentSub = currentSub->next;
+            tempSub->next = NULL;
+            tempSub->prev = NULL;
             munmap(tempSub, sizeof(struct subChainNode));
         }
+
+        // Deallocate memory at the starting physical address of the mainChainNode
+        munmap(currentMain->startingPhysicalAddr, currentMain->pageCount * PAGE_SIZE);
+
         struct mainChainNode* tempMain = currentMain;
         currentMain = currentMain->next;
         munmap(tempMain, sizeof(struct mainChainNode));
     }
+
     // Set the main_chain_head to NULL to indicate that the MeMS system is finished
     head->next = NULL;
 }
@@ -160,7 +168,6 @@ void* mems_malloc(size_t size){
 	}else{
 		// Find a sufficiently large segment in the free list
 		for (mainChainNode *currentMain = head->next; currentMain != NULL;currentMain = currentMain->next){
-			printf("unallocted mem %lu",currentMain->unallocatedMem);
 			if (currentMain-> unallocatedMem >= size) {//No need to allocate new memory
 				currentMain->unallocatedMem-=size;
 				struct subChainNode* currentSub = currentMain->subChain;
@@ -228,8 +235,7 @@ void mems_print_stats() {
 		mainNode=mainNode->next;
 		mainNodeNumber++;
 	}
-	printf("\n");
-	printf("Unused memory in Free list: %zu", freeMem);
+	printf("Unused memory in Free list: %zu\n\n", freeMem);
 }
 
 /*
@@ -238,11 +244,26 @@ Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: MeMS physical address mapped to the passed ptr (MeMS virtual address).
 */
 void* mems_get(void* v_ptr) {
-	printf("v_ptr %lu\n",(size_t)v_ptr);
-	struct mainChainNode* mainNode=head->next;
-	while ((size_t)mainNode->subChain->subAddr<=(size_t)v_ptr) mainNode=mainNode->next;
-	return (void*)((size_t)mainNode->startingPhysicalAddr)+((size_t)v_ptr - (size_t)mainNode->subChain->subAddr);
+    struct mainChainNode* mainNode = head->next;
+    while (mainNode) {
+        if (mainNode->subChain && (size_t)mainNode->subChain->subAddr <= (size_t)v_ptr) {
+            struct subChainNode* subNode = mainNode->subChain;
+            while (subNode) {
+                if ((size_t)subNode->subAddr <= (size_t)v_ptr &&
+                    ((size_t)v_ptr < ((size_t)subNode->subAddr + subNode->segmentSize))) {
+                    // Calculate the offset within the segment
+                    size_t offset = (size_t)v_ptr - (size_t)subNode->subAddr;
+                    // Calculate the physical address
+                    return (void*)((size_t)mainNode->startingPhysicalAddr + offset);
+                }
+                subNode = subNode->next;
+            }
+        }
+        mainNode = mainNode->next;
+    }
+    return NULL; // Return NULL for an invalid v_ptr
 }
+
 
 /*
 this function free up the memory pointed by our virtual_address and add it to the free list
@@ -250,23 +271,61 @@ Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: nothing
 */
 void mems_free(void* v_ptr) {
-	struct mainChainNode* mainNode=head->next;
-	while ((size_t)v_ptr<=(size_t)mainNode->next->subChain->subAddr) mainNode=mainNode->next;
-	struct subChainNode* subNode=mainNode->subChain;
-	while ((size_t)v_ptr!=(size_t)subNode->subAddr) subNode=subNode->next;
-	if ((size_t)v_ptr!=(size_t)mainNode->subChain->subAddr) printf("ptr subChainNode not found");
-	if (subNode->is_hole==0) subNode->is_hole=1;
-	else (printf("ptr was already hole"));
-	//checking for adjacent holes
-	if (subNode->prev->is_hole){
-		subNode->prev->segmentSize=subNode->prev->segmentSize+subNode->segmentSize;
-		subNode->prev->next=subNode->next;
-		subNode->next->prev=subNode->prev;
-		subNode=subNode->prev;
-	}
-	if (subNode->next->is_hole){
-		subNode->segmentSize=subNode->next->segmentSize+subNode->segmentSize;
-		subNode->next=subNode->next->next;
-		subNode->next->next->prev=subNode;
-	}
+    struct mainChainNode* mainNode = head->next;
+
+    // Check if mainNode is NULL (no main chain node)
+    if (mainNode == NULL) {
+        printf("Error: No main chain nodes available.\n");
+        return;
+    }
+
+    // Traverse the main chain nodes to find the right one
+    while (mainNode->next != NULL && (size_t)v_ptr > (size_t)mainNode->next->subChain->subAddr) {
+        mainNode = mainNode->next;
+    }
+
+    // Check if the v_ptr is outside the bounds of the main chain nodes
+    if ((size_t)v_ptr < (size_t)mainNode->subChain->subAddr) {
+        printf("Error: v_ptr not found in the main chain nodes.\n");
+        return;
+    }
+
+    struct subChainNode* subNode = mainNode->subChain;
+
+    // Traverse the sub-chain nodes to find the right one
+    while ((size_t)v_ptr != (size_t)subNode->subAddr) {
+        subNode = subNode->next;
+    }
+
+    if (subNode->is_hole == 0) {
+        subNode->is_hole = 1;
+        mainNode->unallocatedMem += subNode->segmentSize;  // Decrease unallocatedMem
+    } else {
+        printf("Error: v_ptr was already a hole.\n");
+        return;
+    }
+
+    // Check for adjacent holes and merge them if necessary
+    if (subNode->prev != NULL && subNode->prev->is_hole) {
+        subNode->prev->segmentSize += subNode->segmentSize;
+        subNode->prev->next = subNode->next;
+        if (subNode->next != NULL) {
+            subNode->next->prev = subNode->prev;
+        }
+        struct subChainNode* tempSubNode = subNode;
+        subNode = subNode->prev;
+        // Unmap the memory associated with the merged node
+        munmap(tempSubNode, sizeof(struct subChainNode));
+    }
+
+    if (subNode->next != NULL && subNode->next->is_hole) {
+        subNode->segmentSize += subNode->next->segmentSize;
+        subNode->next = subNode->next->next;
+        if (subNode->next != NULL) {
+            subNode->next->prev = subNode;
+        }
+        struct subChainNode* tempSubNode = subNode->next;
+        // Unmap the memory associated with the merged node
+        munmap(tempSubNode, sizeof(struct subChainNode));
+    }
 }
