@@ -61,7 +61,7 @@ void mems_init(){
 		exit(1);
 	}
 	head->next= NULL;
-	starting_v_addr=1000;
+	starting_v_addr=0;
 	totalPageCount=0;
 }
 
@@ -278,23 +278,22 @@ void mems_free(void* v_ptr) {
         printf("Error: No main chain nodes available.\n");
         return;
     }
-
     // Traverse the main chain nodes to find the right one
-    while (mainNode->next != NULL && (size_t)v_ptr > (size_t)mainNode->next->subChain->subAddr) {
+    while (mainNode->next != NULL && (size_t)v_ptr >= (size_t)mainNode->next->subChain->subAddr) {
         mainNode = mainNode->next;
-    }
-
-    // Check if the v_ptr is outside the bounds of the main chain nodes
-    if ((size_t)v_ptr < (size_t)mainNode->subChain->subAddr) {
-        printf("Error: v_ptr not found in the main chain nodes.\n");
-        return;
     }
 
     struct subChainNode* subNode = mainNode->subChain;
 
     // Traverse the sub-chain nodes to find the right one
-    while ((size_t)v_ptr != (size_t)subNode->subAddr) {
+    while ((size_t)v_ptr > (size_t)subNode->subAddr) {
         subNode = subNode->next;
+    }
+
+	// Check if the v_ptr is outside the bounds of the main chain nodes
+    if ((size_t)v_ptr > (size_t)subNode->subAddr) {
+        printf("Error: v_ptr not found in the main chain nodes.\n");
+        return;
     }
 
     if (subNode->is_hole == 0) {
